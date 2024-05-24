@@ -10,7 +10,7 @@ import java.sql.SQLException;
 public class Mapping
 {
     //atributes
-    Connection connectDB;
+    private Connection connectDB;
 
     //Constructor
     Mapping(String url, String user, String password)
@@ -21,6 +21,9 @@ public class Mapping
         }
         catch (SQLException e)
         {
+            System.out.println("Error al conectar con la base de datos oracle " + url);
+            System.out.println("Usuario: " + user);
+            System.out.println("password: " + password);
             e.printStackTrace();
         }
         
@@ -29,17 +32,42 @@ public class Mapping
     //Public methods
     public void convertObjectToTable(Object obj)
     {
-        System.out.println("const: "+ connectDB);
         Class<?> auxClass = obj.getClass();
         String className = auxClass.getSimpleName().toUpperCase();
         findTable(className, auxClass);
         insertAttributes(auxClass, className, obj);
     }
+    
+    public void getTable(String tableName)
+    {
+
+    }
+
+    public void deleteObjectFromTable(Object obj)
+    {
+
+        if(isContainedTheObjectOnDB(obj)){
+            sendDeleteQuery(obj);
+            return;
+       }
+
+       System.out.println("El Objeto no existe en la db");
+    }
+
+    public void updateObjectFromTable(Object obj)
+    {
+        if(isContainedTheObjectOnDB(obj)){
+            sendUpdateQuery(obj);
+            return;
+       }
+
+       System.out.println("El Objeto no existe en la db");
+    }
 
     //Private methods
     private void findTable(String className, Class<?> class1)
     {
-        if(!isContainedTheTable(className))
+        if(!isContainedTheTableOnDB(className))
         {
             System.out.println("La Tabla " + className + " no se encontro en la db");
             createTable(class1);
@@ -49,7 +77,7 @@ public class Mapping
         System.out.println("si existe la tabla " + className + " en la db");
     }
 
-    private boolean isContainedTheTable(String className)
+    private boolean isContainedTheTableOnDB(String className)
     {
         String query = "SELECT count(*) FROM user_tables WHERE table_name = ?";
         try(PreparedStatement statement = connectDB.prepareStatement(query))
@@ -60,7 +88,6 @@ public class Mapping
                 if (resultSet.next())
                 {
                     int count = resultSet.getInt(1);
-                    System.out.println("tablas con el nombre del objeto: " + count);
                     return count > 0;
                 }
             }
@@ -71,6 +98,7 @@ public class Mapping
           e.printStackTrace();  
         }
 
+        System.out.println("no existe la tabla " + className + "en la db");
         return false;
     }
 
@@ -168,7 +196,6 @@ public class Mapping
         query.append(") ");
         values.append(")");
         String completeQuery = query.toString() + values.toString();
-        System.out.println(completeQuery);
 
         try (PreparedStatement statement = connectDB.prepareStatement(completeQuery))
         {
@@ -179,6 +206,161 @@ public class Mapping
         {
             e.printStackTrace();
             System.out.println("Error al insertar el objeto a la tabla "+ className);
+        }
+    }
+
+    private boolean isContainedTheObjectOnDB(Object obj){
+        Class<?> auxClass = obj.getClass();
+        String className = auxClass.getSimpleName().toUpperCase();
+
+        if(isContainedTheTableOnDB(className)){
+            Field[] attributes = auxClass.getDeclaredFields();
+            StringBuilder query = new StringBuilder("SELECT * FROM ").append(className).append(" WHERE ");
+            StringBuilder values = new StringBuilder();
+            try
+            {
+              for(Field attribute : attributes)
+              {
+                attribute.setAccessible(true);
+                String attributeType = attribute.getName();
+
+                if(attributeType.equals("id"))
+                {
+                  Object attributeValue = attribute.get(obj);
+                  values = new StringBuilder(attributeType).append(" = ").append(attributeValue);  
+                }
+                
+              }
+
+              query.append(values);
+            }
+            catch(IllegalAccessException e)
+            {
+                System.out.println("Error al obtener los valores del objeto " + values);
+                return false;
+            }
+            
+            try
+            {
+                PreparedStatement statement = connectDB.prepareStatement(query.toString());
+                ResultSet resultSet = statement.executeQuery();
+                if (resultSet.next())
+                {
+                    int count = resultSet.getRow();
+                    return count > 0;
+                }
+            }
+            catch(SQLException e)
+            {
+                e.printStackTrace();
+                System.out.println("Error al buscar el objeto "+ values +" en la db");
+                return false;
+            }
+        }
+
+        return false;
+    }
+    
+    private void sendDeleteQuery(Object obj)
+    {
+        Class<?> auxClass = obj.getClass();
+        String className = auxClass.getSimpleName().toUpperCase();
+
+        Field[] attributes = auxClass.getDeclaredFields();
+        StringBuilder query = new StringBuilder("Delete FROM ").append(className).append(" WHERE ");
+        StringBuilder values = new StringBuilder();
+        try
+        {
+            for(Field attribute : attributes)
+            {
+            attribute.setAccessible(true);
+            String attributeType = attribute.getName();
+
+            if(attributeType.equals("id"))
+            {
+                Object attributeValue = attribute.get(obj);
+                values = new StringBuilder(attributeType).append(" = ").append(attributeValue);  
+            }
+                
+            }
+
+            query.append(values);
+        }
+        catch(IllegalAccessException e)
+        {
+            System.out.println("No se pudo eliminar el objeto debido a que no se pudo acceder a los datos" + values);
+                return;
+        }
+            
+        try
+        {
+            PreparedStatement statement = connectDB.prepareStatement(query.toString());
+            statement.executeQuery();
+            System.out.println("Se elimino correctamente el objeto " + values + " de la tabla " + className);
+        }
+        catch(SQLException e)
+        {
+            e.printStackTrace();
+            System.out.println("No se pudo ejecutar la siguiente instruccion: " + query);
+            return;
+        }
+    }
+
+    private void sendUpdateQuery(Object obj)
+    {
+        Class<?> auxClass = obj.getClass();
+        String className = auxClass.getSimpleName().toUpperCase();
+
+        Field[] attributes = auxClass.getDeclaredFields();
+        StringBuilder query = new StringBuilder("Update ").append(className).append(" SET ");
+        StringBuilder where_id = new StringBuilder(" WHERE ");
+        StringBuilder values = new StringBuilder();
+        try
+        {
+            for(Field attribute : attributes)
+            {
+            attribute.setAccessible(true);
+            String attributeType = attribute.getName();
+            Object attributeValue = attribute.get(obj);
+            Class<?> typeClass = attribute.getType();
+
+            if(attributeType.equals("id"))
+            {
+                where_id.append(attributeType).append(" = ").append(attributeValue);
+            }
+            else
+            {
+                
+                if(typeClass == String.class || typeClass == char.class)
+                {
+                    values.append(attributeType).append(" = ").append("'").append(attributeValue).append("', ");
+                }
+                else
+                {
+                    values.append(attributeType).append(" = ").append(attributeValue).append(", ");
+                }
+            }
+            }
+            values.delete(values.length() - 2, values.length());
+            query.append(values).append(where_id);
+        }
+        catch(IllegalAccessException e)
+        {
+            System.out.println("No se pudo eliminar el objeto debido a que no se pudo acceder a los datos" + values);
+                return;
+        }
+        
+        try
+        {
+            PreparedStatement statement = connectDB.prepareStatement(query.toString());
+            statement.executeQuery();
+            System.out.println("Se actualizo correctamente el objeto " + values + " de la tabla " + className);
+        }
+        catch(SQLException e)
+        {
+            e.printStackTrace();
+            System.out.println("No se pudo ejecutar la siguiente instruccion: " + query);
+            return;
         }
     }
 }
