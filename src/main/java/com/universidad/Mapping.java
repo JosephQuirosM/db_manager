@@ -5,6 +5,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 
 public class Mapping
@@ -30,7 +31,7 @@ public class Mapping
     }
 
     //Public methods
-    public void convertObjectToTable(Object obj)
+    public void insertObjectInTable(Object obj)
     {
         Class<?> auxClass = obj.getClass();
         String className = auxClass.getSimpleName().toUpperCase();
@@ -38,9 +39,15 @@ public class Mapping
         insertAttributes(auxClass, className, obj);
     }
     
-    public void getTable(String tableName)
+    public void showTable(Class<?> pClass)
     {
+        String className = pClass.getSimpleName().toUpperCase();
 
+        if(isContainedTheTableOnDB(className)){
+            printTable(className);
+            return;
+       } 
+       System.out.println("No existe la tabla " + className);
     }
 
     public void deleteObjectFromTable(Object obj)
@@ -362,5 +369,43 @@ public class Mapping
             System.out.println("No se pudo ejecutar la siguiente instruccion: " + query);
             return;
         }
+    }
+
+    private void printTable(String tableName)
+    {
+        String query = "SELECT * FROM " + tableName;
+
+        try(PreparedStatement statement = connectDB.prepareStatement(query))
+        {
+            ResultSet resultSet = statement.executeQuery();
+            ResultSetMetaData metaData = resultSet.getMetaData();
+            int columns = metaData.getColumnCount();
+            String columnName;
+            String columnValue;
+            String object = "";
+
+            System.out.println("------- " + tableName + " -------");
+
+            while(resultSet.next())
+            {
+                for(int column = 1; column <= columns; column++ )
+                {
+                    columnName = metaData.getColumnName(column);
+                    columnValue = resultSet.getString(column);
+                    object += columnName + ": " + columnValue + " | ";
+                }
+                System.out.println(object);
+                object = "";
+            }
+            System.out.println(" ");
+        }
+        catch(SQLException e)
+        {
+            System.out.println("Error al obtener la tabla " + tableName);
+            e.printStackTrace();
+            return;
+        }
+
+        
     }
 }
