@@ -8,13 +8,13 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 
-public class Mapping
+public class OracleMapping
 {
     //atributes
     private Connection connectDB;
 
     //Constructor
-    Mapping(String url, String user, String password)
+    OracleMapping(String url, String user, String password)
     {
         try
         {

@@ -14,13 +14,20 @@
     </properties>
 
     <dependencies>
-
+        <!-- Dependencia Oracle -->
         <dependency>
             <groupId>com.oracle.database.jdbc</groupId>
             <artifactId>ojdbc8</artifactId>
             <version>23.2.0.0</version>
         </dependency>
         
+        <!-- Dependencia MongoDB -->
+        <dependency>
+            <groupId>org.mongodb</groupId>
+            <artifactId>mongodb-driver-sync</artifactId>
+            <version>5.1.0</version>
+        </dependency>
+
     </dependencies>
 
 </project>
