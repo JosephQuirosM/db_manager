@@ -11,6 +11,7 @@ import org.bson.Document;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.List;
 
 public class MongoMapping {
     private MongoDatabase connectDB;
@@ -48,8 +49,8 @@ public class MongoMapping {
         }
     }
 
-    public <T> ArrayList<T> getCollectionFromDB(Class<T> pClass) {
-        ArrayList<T> objectList = new ArrayList<>();
+    public <T> List<T> getCollectionFromDB(Class<T> pClass) {
+        List<T> objectList = new ArrayList<>();
         String className = pClass.getSimpleName().toLowerCase();
         MongoCollection<Document> collection = connectDB.getCollection(className);
 
@@ -67,10 +68,10 @@ public class MongoMapping {
         return objectList;
     }
 
-    public <T> T getObjectFromDB(Class<T> pClass, Object idOfObject) {
+    public <T> T getObjectFromDB(Class<T> pClass, Object id) {
         String className = pClass.getSimpleName().toLowerCase();
         MongoCollection<Document> collection = connectDB.getCollection(className);
-        Document query = new Document("_id", idOfObject);
+        Document query = new Document("_id", id);
 
         try {
             Document doc = collection.find(query).first();
@@ -87,14 +88,14 @@ public class MongoMapping {
         return null;
     }
 
-    public <T> void deleteObjectFromCollection(Class<T> pClass, Object obj) {
+    public <T> void deleteObjectFromCollectionWithID(Class<T> pClass, Object id) {
         String className = pClass.getSimpleName().toLowerCase();
 
         try
         {
             
             MongoCollection<Document> collection = connectDB.getCollection(className);
-            Document query = new Document("_id", obj);
+            Document query = new Document("_id", id);
     
             collection.deleteOne(query);
             System.out.println("Objeto eliminado de la colección " + className + " correctamente.");

@@ -1,5 +1,6 @@
 package com.universidad;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -7,11 +8,14 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class OracleMapping
 {
     //atributes
     private Connection connectDB;
+    private int connectionType;
 
     //Constructor
     OracleMapping(String url, String user, String password)
@@ -26,8 +30,20 @@ public class OracleMapping
             System.out.println("Usuario: " + user);
             System.out.println("password: " + password);
             e.printStackTrace();
+            return;
         }
-        
+
+        if(url.contains("oracle"))
+        {
+            connectionType = 1;
+            return;
+        }
+
+        if(url.contains("mysql"))
+        {
+            connectionType = 2;
+            return;
+        }
     }
 
     //Public methods
@@ -39,7 +55,7 @@ public class OracleMapping
         insertAttributes(auxClass, className, obj);
     }
     
-    public void showTable(Class<?> pClass)
+    public void printTable(Class<?> pClass)
     {
         String className = pClass.getSimpleName().toUpperCase();
 
@@ -48,6 +64,45 @@ public class OracleMapping
             return;
        } 
        System.out.println("No existe la tabla " + className);
+    }
+
+    public <T> List<T> selectAll(Class<T> pClass) {
+        List<T> result = new ArrayList<>();
+        String tableName = pClass.getSimpleName().toUpperCase();
+        try {
+            String query = "SELECT * FROM " + tableName;
+            try (PreparedStatement statement = connectDB.prepareStatement(query)) {
+                try (ResultSet resultSet = statement.executeQuery()) {
+                    while (resultSet.next()) {
+                        T instance = createInstance(pClass, resultSet);
+                        result.add(instance);
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Error al recuperar objetos de la tabla: " + e.getMessage());
+        }
+        return result;
+    }
+
+    public <T> T selectObjectWithID(Class<T> pClass, Object id) {
+        String tableName = pClass.getSimpleName().toUpperCase();
+    
+        String query = "SELECT * FROM " + tableName + " WHERE id = ?";
+        try (PreparedStatement statement = connectDB.prepareStatement(query)) {
+            statement.setObject(1, id);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return createInstance(pClass, resultSet);
+                } else {
+                    System.out.println("No se encontró ningún registro con ID " + id + " en la tabla " + tableName);
+                    return null;
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Error al seleccionar el registro con ID " + id + ": " + e.getMessage());
+            return null;
+        }
     }
 
     public void deleteObjectFromTable(Object obj)
@@ -76,17 +131,25 @@ public class OracleMapping
     {
         if(!isContainedTheTableOnDB(className))
         {
-            System.out.println("La Tabla " + className + " no se encontro en la db");
             createTable(class1);
-            return;
         }
 
-        System.out.println("si existe la tabla " + className + " en la db");
     }
 
     private boolean isContainedTheTableOnDB(String className)
     {
-        String query = "SELECT count(*) FROM user_tables WHERE table_name = ?";
+        String query = "";
+
+        if (connectionType == 1) //oracle
+        {
+            query = "SELECT count(*) FROM user_tables WHERE table_name = ?";
+        }
+        
+        if (connectionType == 2) //MySQL
+        {
+            query =  "SELECT count(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?";
+        }
+
         try(PreparedStatement statement = connectDB.prepareStatement(query))
         {
             statement.setString(1, className);
@@ -302,7 +365,7 @@ public class OracleMapping
         try
         {
             PreparedStatement statement = connectDB.prepareStatement(query.toString());
-            statement.executeQuery();
+            statement.executeUpdate();
             System.out.println("Se elimino correctamente el objeto " + values + " de la tabla " + className);
         }
         catch(SQLException e)
@@ -360,7 +423,7 @@ public class OracleMapping
         try
         {
             PreparedStatement statement = connectDB.prepareStatement(query.toString());
-            statement.executeQuery();
+            statement.executeUpdate();
             System.out.println("Se actualizo correctamente el objeto " + values + " de la tabla " + className);
         }
         catch(SQLException e)
@@ -407,5 +470,42 @@ public class OracleMapping
         }
 
         
+    }
+    
+    private <T> T createInstance(Class<T> pClass, ResultSet resultSet) throws SQLException {
+        try {
+            Constructor<T> constructor = pClass.getDeclaredConstructor();
+            constructor.setAccessible(true);
+            T instance = constructor.newInstance();
+
+            Field[] fields =pClass.getDeclaredFields();
+            for (Field field : fields) {
+                field.setAccessible(true);
+                String fieldName = field.getName();
+                Object fieldValue = resultSet.getObject(fieldName);
+
+                if (fieldValue != null) {
+                    if (field.getType() == int.class || field.getType() == Integer.class) {
+                        fieldValue = ((Number) fieldValue).intValue();
+                    } else if (field.getType() == double.class || field.getType() == Double.class) {
+                        fieldValue = ((Number) fieldValue).doubleValue();
+                    } else if (field.getType() == float.class || field.getType() == Float.class) {
+                        fieldValue = ((Number) fieldValue).floatValue();
+                    } else if (field.getType() == long.class || field.getType() == Long.class) {
+                        fieldValue = ((Number) fieldValue).longValue();
+                    } else if (field.getType() == boolean.class || field.getType() == Boolean.class) {
+                        fieldValue = (fieldValue instanceof Number) ? ((Number) fieldValue).intValue() != 0 : Boolean.parseBoolean(fieldValue.toString());
+                    }
+
+                    field.set(instance, fieldValue);
+                }
+            }
+
+            return instance;
+        } catch (NoSuchMethodException e) {
+            throw new SQLException("No se pudo encontrar el constructor predeterminado para la clase " + pClass.getSimpleName() + ": " + e.getMessage(), e);
+        } catch (InstantiationException | IllegalAccessException | java.lang.reflect.InvocationTargetException e) {
+            throw new SQLException("Error al instanciar la clase " + pClass.getSimpleName() + ": " + e.getMessage(), e);
+        }
     }
 }
