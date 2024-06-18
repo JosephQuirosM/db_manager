@@ -28,7 +28,6 @@ public class MongoMapping {
             System.out.println("Error al conectar con la db Mongo " + Mongodb_Name + " url:" + url);
         }
     }
-    
 
     public void insertObjectOnCollection(Object obj) {
         try
